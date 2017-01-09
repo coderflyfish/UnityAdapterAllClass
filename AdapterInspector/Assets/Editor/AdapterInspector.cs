@@ -31,6 +31,7 @@ public static class AdapterInspector
     private static bool mEndHorizontal = false;
     private static bool minimalisticLook = false;
     private static SerializedObject m_sp;
+
     public static void SetTarget(object target, SerializedObject sp)
     {
         m_sp = sp;
@@ -48,13 +49,13 @@ public static class AdapterInspector
                     value = CreateInstance(fieldArray[i].FieldType) as Object;
                     fieldArray[i].SetValue(target, value);
                 }
-                var sp1 = new SerializedObject(value);
+                SerializedObject sp1 = new SerializedObject(value);
                 OprAdapterInspector(sp1, null);
                 sp1.ApplyModifiedProperties();
             }
             else
             {
-                EditorGUILayout.PropertyField(sp.FindProperty(fieldArray[i].Name));
+				EditorGUILayout.PropertyField(sp.FindProperty(fieldArray[i].Name), new GUIContent(GetShowName(fieldArray[i], fieldArray[i].Name, false)), true);
             }
         }
 
@@ -69,9 +70,9 @@ public static class AdapterInspector
         bool load = GUILayout.Button("加载");
         if (save || load)
         {
-            if (!Directory.Exists(Application.dataPath + "/Resources/"))
+            if (!Directory.Exists(Application.dataPath + "/Demo/Resources/Data/"))
             {
-                Directory.CreateDirectory(Application.dataPath + "/Resources/");
+                Directory.CreateDirectory(Application.dataPath + "/Demo/Resources/Data/");
             }
             var value = target as MonoBehaviour;
 
@@ -82,25 +83,17 @@ public static class AdapterInspector
             {
                 configName = value.name;
             }
+           
             for (int i = 0; i < fieldArray.Length; i++)
             {
                 if (fieldArray[i].Name == "ConfigName")
                 {
                     configName = fieldArray[i].GetValue(target) as string;
-                    break;
                 }
-            }
-            for (int i = 0; i < fieldArray.Length; i++)
-            {
-                if (fieldArray[i].FieldType.IsSubclassOf(typeof(ScriptableObject)))
+                else if (fieldArray[i].FieldType.IsSubclassOf(typeof(ScriptableObject)))
                 {
 
-                    string savePath = "Assets/Resources/" + configName + ".asset";
-                    string path = Application.dataPath + "/Resources/" + configName + ".asset";
-                    if (!Directory.Exists(Path.GetDirectoryName(path)))
-                    {
-                        Directory.CreateDirectory(Path.GetDirectoryName(path));
-                    }
+                    string savePath = "Assets/Demo/Resources/Data/" + configName + ".asset";
                     if (save)
                     {
                         Object obj = fieldArray[i].GetValue(target) as ScriptableObject;
@@ -230,16 +223,18 @@ public static class AdapterInspector
         EndContents();
     }
 
+    private static int index1;
     private static void OprIList(IList iList, string name, Type elementType, bool showRemoveSame, SerializedProperty property)
     {
         bool isObject = IsObject(elementType);
         int remove = -1;
         
         if (DrawHeader(name))
-        {           
+        {  
             EditorGUILayout.BeginVertical();
             EditorGUILayout.Space();
             var subAttr = GetSerializableAttr(elementType);
+
             if (showRemoveSame)
             {
                 ObjectListRemoveSame = EditorGUILayout.Toggle("允许添加重复项 :", ObjectListRemoveSame);
@@ -303,10 +298,22 @@ public static class AdapterInspector
                 {
                     iList[i] = ShowOprNormalType(iList[i].GetType(), iList[i], i);
                 }
-
-                if (GUILayout.Button("删除"))
+                if (GUILayout.Button("删除", GUILayout.MaxWidth(40)))
                 {
                     remove = i;
+                }
+                //EditorGUILayout.BeginHorizontal();
+                index1 = EditorGUILayout.IntField(index1,GUILayout.MaxWidth(20));
+                
+                if (GUILayout.Button("交换", GUILayout.MaxWidth(40)))
+                {
+                    if (index1 != i && index1 >= 0 && index1 < iList.Count)
+                    {
+                        object value = iList[i];
+                        iList[i] = iList[index1];
+                        iList[index1] = value;
+                        index1 = -1;
+                    }                    
                 }
                 EditorGUILayout.EndHorizontal();
             }
@@ -409,7 +416,7 @@ public static class AdapterInspector
         Type type = oldValue.GetType();
         if (newValue == null )
         {
-            if (type != typeof (GameObject) && !type.IsSubclassOf(typeof (Component)))
+            if (type != typeof (GameObject) && !type.IsSubclassOf(typeof (Component))&&!type.IsSubclassOf(typeof(Motion)))
             {
                 newValue = CreateInstance(type);
             }
@@ -423,52 +430,57 @@ public static class AdapterInspector
         for (int i = 0; i < fields.Length; i++)
         {
             object ov = fields[i].GetValue(oldValue);
-            if (fields[i].FieldType.IsClass)
+            var hide = GetCustomAttr<HideInInspector>(fields[i]);
+            if(hide==null)
             {
-                if (ov != null)
+                if (fields[i].FieldType.IsClass)
                 {
-                    if (fields[i].FieldType.IsGenericType)
+                    if (ov != null)
                     {
-                        Type genericType = fields[i].FieldType.GetGenericTypeDefinition();
-                        if (genericType == typeof (List<>))
+                        if (fields[i].FieldType.IsGenericType)
                         {
-                            fields[i].SetValue(newValue, CopyList(fields[i].FieldType,fields[i].GetValue(newValue) ,ov));
-                            //Type elementType = field.FieldType.GetGenericArguments()[0];
-                            //IList ovList = ov as IList;
-                            //IList nvList = fields[i].GetValue(newValue) as IList;
-                            //if (elementType.IsClass)
-                            //{
-                            //    for (int j = 0; j < ovList.Count; j++)
-                            //    {
-                            //        ovList[i]
-                            //    }
-                            //}
-                            
+                            Type genericType = fields[i].FieldType.GetGenericTypeDefinition();
+                            if (genericType == typeof(List<>))
+                            {
+                                fields[i].SetValue(newValue, CopyList(fields[i].FieldType, fields[i].GetValue(newValue), ov));
+                                //Type elementType = field.FieldType.GetGenericArguments()[0];
+                                //IList ovList = ov as IList;
+                                //IList nvList = fields[i].GetValue(newValue) as IList;
+                                //if (elementType.IsClass)
+                                //{
+                                //    for (int j = 0; j < ovList.Count; j++)
+                                //    {
+                                //        ovList[i]
+                                //    }
+                                //}
+
+                            }
                         }
-                    }
-                    else if (fields[i].FieldType.Name.Contains("[]"))
-                    {
-                         Type elementType = fields[i].FieldType.GetElementType();
-                         var genericType = typeof(List<>).MakeGenericType(elementType);
-                         var oList = ArrayToList(ov as Array, genericType);
-                         object nList = CopyList(oList.GetType(), null, oList);
-                        fields[i].SetValue(newValue, ListToArray(nList as IList, elementType));
+                        else if (fields[i].FieldType.Name.Contains("[]"))
+                        {
+                            Type elementType = fields[i].FieldType.GetElementType();
+                            var genericType = typeof(List<>).MakeGenericType(elementType);
+                            var oList = ArrayToList(ov as Array, genericType);
+                            object nList = CopyList(oList.GetType(), null, oList);
+                            fields[i].SetValue(newValue, ListToArray(nList as IList, elementType));
+                        }
+                        else
+                        {
+                            fields[i].SetValue(newValue, Copy(ov, fields[i].GetValue(newValue)));
+                        }
+
                     }
                     else
                     {
-                        fields[i].SetValue(newValue, Copy(ov, fields[i].GetValue(newValue)));
+                        Debug.LogError(fields[i].FieldType + "==null");
                     }
-                   
                 }
                 else
                 {
-                    Debug.LogError(fields[i].FieldType +"==null");
+                    fields[i].SetValue(newValue, ov);
                 }
             }
-            else
-            {
-                fields[i].SetValue(newValue,ov);
-            }
+            
         }
         return newValue;
     }
